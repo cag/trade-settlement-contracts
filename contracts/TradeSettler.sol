@@ -37,7 +37,7 @@ contract TradeSettler is IERC1155TokenReceiver, Ownable {
         return bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"));
     }
 
-    function DEBUGtestSignedMessages2(address tokenContractAddress, uint amount, uint8 v, bytes32 r, bytes32 s, address signer) external pure returns (bool) {
-        return signer == ecrecover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n64", abi.encode(tokenContractAddress, amount))), v, r, s);
+    function DEBUGtestSignedMessages2(address tokenContractAddress, uint amount, bytes calldata signature, address signer) external pure returns (bool) {
+        return signer == ECDSA.recover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n64", abi.encode(tokenContractAddress, amount))), signature);
     }
 }

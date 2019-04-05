@@ -120,13 +120,13 @@ contract("TradeSettler", function(accounts) {
   it("allows the operator (owner) to post withdrawal requests from EOAs", async () => {
     const amount = toBN(1e18);
 
-    assert.equal(await tradeSettler.DEBUGtestSignedMessages2(erc20.address, amount, randomHex(1), randomHex(32), randomHex(32), erc20Trader), false)
+    assert.equal(await tradeSettler.DEBUGtestSignedMessages2(erc20.address, amount, randomHex(65), erc20Trader), false)
 
-    const signature = getSignatureParameters(await eth.sign(eth.abi.encodeParameters(
+    const signature = (await eth.sign(eth.abi.encodeParameters(
       ['address', 'uint'],
       [erc20.address, amount.toString()],
-    ), erc20Trader))
+    ), erc20Trader)).replace(/00$/, '1b').replace(/01$/, '1c')
 
-    assert(await tradeSettler.DEBUGtestSignedMessages2(erc20.address, amount, signature.v, signature.r, signature.s, erc20Trader))
+    assert(await tradeSettler.DEBUGtestSignedMessages2(erc20.address, amount, signature, erc20Trader))
   })
 });
