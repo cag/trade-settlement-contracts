@@ -1,12 +1,13 @@
 pragma solidity ^0.5.0;
 
 import { SafeMath } from "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import { IERC20 } from "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import { IERC1155 } from "erc-1155/contracts/IERC1155.sol";
 import { IERC1155TokenReceiver } from "erc-1155/contracts/IERC1155TokenReceiver.sol";
-import { IERC20 } from "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import { ISignatureValidator } from "@gnosis.pm/safe-contracts/contracts/interfaces/ISignatureValidator.sol";
+import { Ownable } from "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
-contract TradeSettler is IERC1155TokenReceiver {
+contract TradeSettler is IERC1155TokenReceiver, Ownable {
     using SafeMath for uint;
 
     mapping(address => mapping(address => mapping(uint => uint))) internal balances;
