@@ -35,7 +35,8 @@
     "eslint-plugin-prettier": "^3.0.1",
     "prettier": "1.16.4",
     "solhint": "^2.0.0",
-    "truffle": "^5.0.11"
+    "truffle": "^5.0.11",
+    "web3-utils": "^1.0.0-beta.52"
   },
   "dependencies": {
     "@gnosis.pm/safe-contracts": "^1.0.0",

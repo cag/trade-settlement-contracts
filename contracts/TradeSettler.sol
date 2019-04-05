@@ -1,6 +1,7 @@
 pragma solidity ^0.5.0;
 
 import { SafeMath } from "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import { ECDSA } from "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import { IERC20 } from "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import { IERC1155 } from "erc-1155/contracts/IERC1155.sol";
 import { IERC1155TokenReceiver } from "erc-1155/contracts/IERC1155TokenReceiver.sol";
@@ -34,5 +35,9 @@ contract TradeSettler is IERC1155TokenReceiver, Ownable {
         }
 
         return bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"));
+    }
+
+    function DEBUGtestSignedMessages2(address tokenContractAddress, uint amount, uint8 v, bytes32 r, bytes32 s, address signer) external pure returns (bool) {
+        return signer == ecrecover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n64", abi.encode(tokenContractAddress, amount))), v, r, s);
     }
 }

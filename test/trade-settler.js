@@ -3,7 +3,8 @@ const TradeSettler = artifacts.require("TradeSettler");
 const MockERC20 = artifacts.require("MockERC20");
 const MockERC1155 = artifacts.require("MockERC1155");
 
-const { toBN, randomHex } = web3.utils;
+const { eth } = web3;
+const { toBN, randomHex, keccak256, getSignatureParameters } = require('web3-utils');
 
 contract("TradeSettler", function(accounts) {
   const [
@@ -115,4 +116,17 @@ contract("TradeSettler", function(accounts) {
       );
     }
   });
+
+  it("allows the operator (owner) to post withdrawal requests from EOAs", async () => {
+    const amount = toBN(1e18);
+
+    assert.equal(await tradeSettler.DEBUGtestSignedMessages2(erc20.address, amount, randomHex(1), randomHex(32), randomHex(32), erc20Trader), false)
+
+    const signature = getSignatureParameters(await eth.sign(eth.abi.encodeParameters(
+      ['address', 'uint'],
+      [erc20.address, amount.toString()],
+    ), erc20Trader))
+
+    assert(await tradeSettler.DEBUGtestSignedMessages2(erc20.address, amount, signature.v, signature.r, signature.s, erc20Trader))
+  })
 });
