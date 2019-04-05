@@ -4,7 +4,7 @@
   "description": "Smart contracts for settling ERC20/1155 trades",
   "main": " ",
   "scripts": {
-    "lintfix": "eslint . --fix && solhint contracts/*.sol",
+    "lintfix": "eslint . --fix && solhint contracts/*.sol test/*.sol",
     "test": "truffle test"
   },
   "repository": {
@@ -37,6 +37,7 @@
     "truffle": "^5.0.11"
   },
   "dependencies": {
+    "@gnosis.pm/safe-contracts": "^1.0.0",
     "erc-1155": "github:enjin/erc-1155",
     "openzeppelin-solidity": "^2.2.0"
   }
