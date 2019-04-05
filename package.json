@@ -4,6 +4,7 @@
   "description": "Smart contracts for settling ERC20/1155 trades",
   "main": " ",
   "scripts": {
+    "compile": "truffle compile",
     "lintfix": "eslint . --fix && solhint contracts/*.sol test/*.sol",
     "test": "truffle test"
   },

@@ -1,7 +1,7 @@
 const assert = require("assert");
 const TradeSettler = artifacts.require("TradeSettler");
-const ERC20Mintable = artifacts.require("ERC20Mintable");
-const ERC1155Mintable = artifacts.require("ERC1155Mintable");
+const MockERC20 = artifacts.require("MockERC20");
+const MockERC1155 = artifacts.require("MockERC1155");
 
 const { toBN, randomHex } = web3.utils;
 
@@ -19,8 +19,8 @@ contract("TradeSettler", function(accounts) {
 
   before(async () => {
     tradeSettler = await TradeSettler.new({ from: operator });
-    erc20 = await ERC20Mintable.new({ from: erc20Minter });
-    erc1155 = await ERC1155Mintable.new();
+    erc20 = await MockERC20.new({ from: erc20Minter });
+    erc1155 = await MockERC1155.new();
     for (let i = 0; i < numTokenIds; i++) {
       await erc1155.create(0, "", { from: erc1155Minter });
       tokenIds.push(await erc1155.nonce());
