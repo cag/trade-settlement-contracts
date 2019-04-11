@@ -9,6 +9,12 @@ import { ISignatureValidator } from "@gnosis.pm/safe-contracts/contracts/interfa
 import { Ownable } from "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 contract TradeSettler is IERC1155TokenReceiver, Ownable {
+    bytes32 constant DOMAIN_SEPARATOR = keccak256(abi.encode(
+        keccak256("EIP712Domain(string name,string version)"),
+        keccak256("TradeSettler"),
+        keccak256("0.1")
+    ));
+
     using SafeMath for uint;
 
     mapping(address => mapping(address => mapping(uint => uint))) internal balances;
@@ -37,7 +43,14 @@ contract TradeSettler is IERC1155TokenReceiver, Ownable {
         return bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"));
     }
 
-    function DEBUGtestSignedMessages2(address tokenContractAddress, uint amount, bytes calldata signature, address signer) external pure returns (bool) {
-        return signer == ECDSA.recover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n64", abi.encode(tokenContractAddress, amount))), signature);
+    function DEBUGtestSignedMessages2(address tokenContractAddress, uint amount, bytes calldata signature, address signer) external view returns (bool) {
+        return signer == ECDSA.recover(keccak256(abi.encodePacked(
+            "\x19\x01", DOMAIN_SEPARATOR,
+            // message
+            keccak256(abi.encode(
+                keccak256("WithdrawERC20(uint amount)"),
+                amount
+            ))
+        )), signature);
     }
 }
