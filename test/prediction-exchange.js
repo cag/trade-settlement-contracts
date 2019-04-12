@@ -4,6 +4,7 @@ const Web3 = require("web3");
 const PredictionExchange = artifacts.require("PredictionExchange");
 const PredictionMarketSystem = artifacts.require("PredictionMarketSystem");
 const MockERC20 = artifacts.require("MockERC20");
+const GnosisSafe = artifacts.require("GnosisSafe")
 
 web3 = new Web3(web3.currentProvider);
 const { eth } = web3;
@@ -65,13 +66,21 @@ const typedDataCommon = {
   }
 };
 
+const safeOperations = {
+  CALL: 0,
+  DELEGATECALL: 1,
+  CREATE: 2
+}
+
 contract("PredictionExchange", function(accounts) {
   const [
     operator,
     minter,
     oracle,
     trader1,
-    trader2
+    trader2,
+    safeOwner1,
+    safeOwner2,
   ] = accounts;
 
   const questionId = randomHex(32)
@@ -86,8 +95,9 @@ contract("PredictionExchange", function(accounts) {
     {t: 'bytes32', v: conditionId},
     {t: 'uint', v: indexSet},
   ))
+  const zeroAccount = `0x${'0'.repeat(40)}`
 
-  let predictionExchange, collateralToken, predictionMarketSystem, positionIds;
+  let predictionExchange, collateralToken, predictionMarketSystem, positionIds, gnosisSafe;
   before(async () => {
     collateralToken = await MockERC20.new({ from: minter });
     predictionMarketSystem = await PredictionMarketSystem.new()
@@ -98,6 +108,9 @@ contract("PredictionExchange", function(accounts) {
       {t: 'address', v: collateralToken.address},
       {t: 'bytes32', v: collectionId},
     ))
+
+    gnosisSafe = await GnosisSafe.new()
+    await gnosisSafe.setup([safeOwner1, safeOwner2], 2, zeroAccount, "0x", zeroAccount, 0, zeroAccount)
   });
 
   it("allows users to deposit collateral tokens", async () => {
@@ -247,4 +260,33 @@ contract("PredictionExchange", function(accounts) {
 
     assert.equal(await collateralToken.balanceOf(trader1), amount.toString());
   });
+
+  it("allows the operator (owner) to post collateral withdrawal requests from contracts", async () => {
+    const amount = toBN(1e18);
+    assert.equal(await collateralToken.balanceOf(gnosisSafe.address), 0);
+    await collateralToken.mint(gnosisSafe.address, amount, { from: minter });
+    assert.equal(await collateralToken.balanceOf(gnosisSafe.address), amount.toString());
+
+    // SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)
+    await assert.rejects(gnosisSafe.execTransaction(
+      predictionExchange.address,
+      0,
+      predictionExchange.contract.methods.withdrawCollateral(
+        collateralToken.address,
+        amount.toString(),
+        randomHex(130),
+        gnosisSafe.address
+      ).encodeABI(),
+      safeOperations.CALL,
+      0,
+      0,
+      0,
+      zeroAccount,
+      zeroAccount,
+      randomHex(130)
+    ), /Invalid owner provided/
+    )
+
+    assert.fail('not done yet')
+  })
 });
