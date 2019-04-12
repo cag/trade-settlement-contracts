@@ -31,6 +31,7 @@
   },
   "homepage": "https://github.com/cag/trade-settlement-contracts#readme",
   "devDependencies": {
+    "@gnosis.pm/hg-contracts": "^0.2.0",
     "eslint": "^5.16.0",
     "eslint-config-prettier": "^4.1.0",
     "eslint-plugin-prettier": "^3.0.1",
