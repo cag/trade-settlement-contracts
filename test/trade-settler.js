@@ -50,7 +50,11 @@ const typedDataCommon = {
       // { name: 'chainId', type: 'uint' },
       // { name: 'verifyingContract', type: 'address' },
     ],
-    WithdrawERC20: [{ name: "amount", type: "uint" }]
+    WithdrawERC20: [
+      { name: "nonce", type: "uint" },
+      { name: "erc20", type: "address" },
+      { name: "amount", type: "uint" }
+    ]
   },
   domain: {
     name: "TradeSettler",
@@ -171,17 +175,18 @@ contract("TradeSettler", function(accounts) {
     }
   });
 
-  it("allows the operator (owner) to post withdrawal requests from EOAs", async () => {
+  it("allows the operator (owner) to post ERC20 withdrawal requests from EOAs", async () => {
     const amount = toBN(1e18);
 
-    assert.equal(
-      await tradeSettler.DEBUGtestSignedMessages2(
+    await assert.rejects(
+      tradeSettler.withdrawERC20(
         erc20.address,
         amount,
         randomHex(65),
-        erc20Trader
+        erc20Trader,
+        { from: operator }
       ),
-      false
+      /signature does not match/
     );
 
     const signature = ethSigUtil.signTypedData(getPrivateKey(erc20Trader), {
@@ -189,6 +194,8 @@ contract("TradeSettler", function(accounts) {
         {
           primaryType: "WithdrawERC20",
           message: {
+            nonce: await tradeSettler.getNonce(erc20Trader),
+            erc20: erc20.address,
             amount
           }
         },
@@ -196,13 +203,36 @@ contract("TradeSettler", function(accounts) {
       )
     });
 
-    assert(
-      await tradeSettler.DEBUGtestSignedMessages2(
+    await assert.rejects(
+      tradeSettler.withdrawERC20(
         erc20.address,
         amount,
         signature,
-        erc20Trader
-      )
+        erc20Trader,
+        { from: erc20Trader }
+      ),
+      /revert/
     );
+
+    assert.equal(
+      await tradeSettler.balanceOf(erc20Trader, erc20.address, "0x"),
+      amount.toString()
+    );
+
+    assert.equal(await erc20.balanceOf(erc20Trader), 0);
+
+    await tradeSettler.withdrawERC20(
+      erc20.address,
+      amount,
+      signature,
+      erc20Trader
+    );
+
+    assert.equal(
+      await tradeSettler.balanceOf(erc20Trader, erc20.address, "0x"),
+      0
+    );
+
+    assert.equal(await erc20.balanceOf(erc20Trader), amount.toString());
   });
 });

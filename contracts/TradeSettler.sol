@@ -18,6 +18,7 @@ contract TradeSettler is IERC1155TokenReceiver, Ownable {
     using SafeMath for uint;
 
     mapping(address => mapping(address => mapping(uint => uint))) internal balances;
+    mapping(address => uint) internal lastNonces;
 
     function balanceOf(address user, address tokenContractAddress, uint tokenId) external view returns (uint) {
         return balances[user][tokenContractAddress][tokenId];
@@ -43,14 +44,23 @@ contract TradeSettler is IERC1155TokenReceiver, Ownable {
         return bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"));
     }
 
-    function DEBUGtestSignedMessages2(address tokenContractAddress, uint amount, bytes calldata signature, address signer) external view returns (bool) {
-        return signer == ECDSA.recover(keccak256(abi.encodePacked(
+    function getNonce(address user) external view returns (uint) {
+        return lastNonces[user] + 1;
+    }
+
+    function withdrawERC20(address tokenContractAddress, uint amount, bytes calldata signature, address signer) external onlyOwner {
+        require(signer == ECDSA.recover(keccak256(abi.encodePacked(
             "\x19\x01", DOMAIN_SEPARATOR,
             // message
             keccak256(abi.encode(
-                keccak256("WithdrawERC20(uint amount)"),
+                keccak256("WithdrawERC20(uint nonce,address erc20,uint amount)"),
+                ++lastNonces[signer],
+                tokenContractAddress,
                 amount
             ))
-        )), signature);
+        )), signature), "signature does not match");
+        require(balances[signer][tokenContractAddress][0] >= amount, "not enough deposited by user");
+        balances[signer][tokenContractAddress][0] -= amount;
+        require(IERC20(tokenContractAddress).transfer(signer, amount), "withdrawal transfer failed");
     }
 }
