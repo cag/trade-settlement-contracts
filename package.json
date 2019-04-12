@@ -20,6 +20,7 @@
     "trading",
     "settlement",
     "erc20",
+    "eip712",
     "erc1155",
     "erc1271"
   ],
