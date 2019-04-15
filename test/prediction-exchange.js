@@ -44,7 +44,7 @@ const getPrivateKey = account =>
     "hex"
   );
 
-const typedDataCommon = {
+const predictionExchangeTypedDataCommon = {
   types: {
     EIP712Domain: [
       { name: "name", type: "string" },
@@ -81,6 +81,7 @@ contract("PredictionExchange", function(accounts) {
     trader2,
     safeOwner1,
     safeOwner2,
+    safeExecutor,
   ] = accounts;
 
   const questionId = randomHex(32)
@@ -95,9 +96,11 @@ contract("PredictionExchange", function(accounts) {
     {t: 'bytes32', v: conditionId},
     {t: 'uint', v: indexSet},
   ))
+  const safeOwners = [safeOwner1, safeOwner2]
+  safeOwners.sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : a === b ? 0 : 1)
   const zeroAccount = `0x${'0'.repeat(40)}`
 
-  let predictionExchange, collateralToken, predictionMarketSystem, positionIds, gnosisSafe;
+  let predictionExchange, collateralToken, predictionMarketSystem, positionIds, gnosisSafe, gnosisSafeTypedDataCommon;
   before(async () => {
     collateralToken = await MockERC20.new({ from: minter });
     predictionMarketSystem = await PredictionMarketSystem.new()
@@ -111,6 +114,31 @@ contract("PredictionExchange", function(accounts) {
 
     gnosisSafe = await GnosisSafe.new()
     await gnosisSafe.setup([safeOwner1, safeOwner2], 2, zeroAccount, "0x", zeroAccount, 0, zeroAccount)
+    gnosisSafeTypedDataCommon = {
+      types: {
+        EIP712Domain: [
+          { name: 'verifyingContract', type: 'address' }
+        ],
+        SafeTx: [
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+          { name: 'operation', type: 'uint8' },
+          { name: 'safeTxGas', type: 'uint256' },
+          { name: 'baseGas', type: 'uint256' },
+          { name: 'gasPrice', type: 'uint256' },
+          { name: 'gasToken', type: 'address' },
+          { name: 'refundReceiver', type: 'address' },
+          { name: 'nonce', type: 'uint256' },
+        ],
+        SafeMessage: [
+          { name: 'message', type: 'bytes' }
+        ]
+      },
+      domain: {
+        verifyingContract: gnosisSafe.address,
+      }
+    }
   });
 
   it("allows users to deposit collateral tokens", async () => {
@@ -224,7 +252,7 @@ contract("PredictionExchange", function(accounts) {
             amount
           }
         },
-        typedDataCommon
+        predictionExchangeTypedDataCommon
       )
     });
 
@@ -262,31 +290,82 @@ contract("PredictionExchange", function(accounts) {
   });
 
   it("allows the operator (owner) to post collateral withdrawal requests from contracts", async () => {
+    async function gnosisSafeCall(contract, method, ...args) {
+      const nonce = await gnosisSafe.nonce()
+      const txData = contract.contract.methods[method](...args).encodeABI()
+      const signatures = safeOwners.map(safeOwner => ethSigUtil.signTypedData(getPrivateKey(safeOwner), {
+        data: Object.assign(
+          {
+            primaryType: "SafeTx",
+            message: {
+              to: contract.address,
+              value: 0,
+              data: txData,
+              operation: safeOperations.CALL,
+              safeTxGas: 0,
+              baseGas: 0,
+              gasPrice: 0,
+              gasToken: zeroAccount,
+              refundReceiver: zeroAccount,
+              nonce,
+            }
+          },
+          gnosisSafeTypedDataCommon
+        )
+      }));
+      return await gnosisSafe.execTransaction(
+        contract.address,
+        0,
+        txData,
+        safeOperations.CALL,
+        0,
+        0,
+        0,
+        zeroAccount,
+        zeroAccount,
+        `0x${ signatures.map(s => s.replace('0x', '')).join('') }`,
+        { from: safeExecutor }
+      )
+    }
+
     const amount = toBN(1e18);
     assert.equal(await collateralToken.balanceOf(gnosisSafe.address), 0);
     await collateralToken.mint(gnosisSafe.address, amount, { from: minter });
     assert.equal(await collateralToken.balanceOf(gnosisSafe.address), amount.toString());
 
-    // SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)
-    await assert.rejects(gnosisSafe.execTransaction(
-      predictionExchange.address,
-      0,
-      predictionExchange.contract.methods.withdrawCollateral(
-        collateralToken.address,
-        amount.toString(),
-        randomHex(130),
-        gnosisSafe.address
-      ).encodeABI(),
-      safeOperations.CALL,
-      0,
-      0,
-      0,
-      zeroAccount,
-      zeroAccount,
-      randomHex(130)
-    ), /Invalid owner provided/
+    await gnosisSafeCall(collateralToken, 'approve', predictionExchange.address, amount.toString())
+    await gnosisSafeCall(predictionExchange, 'depositCollateral', collateralToken.address, amount.toString())
+    assert.equal(await collateralToken.balanceOf(gnosisSafe.address), 0);
+
+    const nonce = await predictionExchange.getNonce(gnosisSafe.address)
+    const signatures = safeOwners.map(safeOwner => ethSigUtil.signTypedData(getPrivateKey(safeOwner), {
+      data: Object.assign(
+        {
+          primaryType: "SafeMessage",
+          message: {
+            message: `0x${Buffer.concat([
+              Buffer.from('1901', 'hex'),
+              ethSigUtil.TypedDataUtils.hashStruct('EIP712Domain', predictionExchangeTypedDataCommon.domain, predictionExchangeTypedDataCommon.types),
+              ethSigUtil.TypedDataUtils.hashStruct("WithdrawCollateral", {
+                nonce,
+                collateralToken: collateralToken.address,
+                amount
+              }, predictionExchangeTypedDataCommon.types)
+            ]).toString('hex')}`
+          }
+        },
+        gnosisSafeTypedDataCommon
+      )
+    }));
+
+    await predictionExchange.withdrawCollateral(
+      collateralToken.address,
+      amount,
+      `0x${ signatures.map(s => s.replace('0x', '')).join('') }`,
+      gnosisSafe.address,
+      { from: operator }
     )
 
-    assert.fail('not done yet')
+    assert.equal(await collateralToken.balanceOf(gnosisSafe.address), amount.toString());
   })
 });

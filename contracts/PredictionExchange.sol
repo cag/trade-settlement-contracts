@@ -1,6 +1,7 @@
 pragma solidity ^0.5.0;
 
 import { SafeMath } from "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import { Address } from "openzeppelin-solidity/contracts/utils/Address.sol";
 import { ECDSA } from "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import { IERC20 } from "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import { IERC1155TokenReceiver } from "erc-1155/contracts/IERC1155TokenReceiver.sol";
@@ -56,16 +57,27 @@ contract PredictionExchange is IERC1155TokenReceiver, Ownable {
     }
 
     function withdrawCollateral(address tokenContractAddress, uint amount, bytes calldata signature, address signer) external onlyOwner {
-        require(signer == ECDSA.recover(keccak256(abi.encodePacked(
-            "\x19\x01", DOMAIN_SEPARATOR,
-            // message
-            keccak256(abi.encode(
-                keccak256("WithdrawCollateral(uint nonce,address collateralToken,uint amount)"),
-                ++lastNonces[signer],
-                tokenContractAddress,
-                amount
-            ))
-        )), signature), "signature does not match");
+        if(Address.isContract(signer)) {
+            require(ISignatureValidator(signer).isValidSignature(abi.encodePacked(
+                "\x19\x01", DOMAIN_SEPARATOR,
+                keccak256(abi.encode(
+                    keccak256("WithdrawCollateral(uint nonce,address collateralToken,uint amount)"),
+                    ++lastNonces[signer],
+                    tokenContractAddress,
+                    amount
+                ))
+            ), signature) == bytes4(keccak256("isValidSignature(bytes,bytes)")), "contract signature invalid");
+        } else {
+            require(signer == ECDSA.recover(keccak256(abi.encodePacked(
+                "\x19\x01", DOMAIN_SEPARATOR,
+                keccak256(abi.encode(
+                    keccak256("WithdrawCollateral(uint nonce,address collateralToken,uint amount)"),
+                    ++lastNonces[signer],
+                    tokenContractAddress,
+                    amount
+                ))
+            )), signature), "signature does not match");
+        }
         require(balances[signer][tokenContractAddress][0] >= amount, "not enough deposited by user");
         balances[signer][tokenContractAddress][0] -= amount;
         require(IERC20(tokenContractAddress).transfer(signer, amount), "withdrawal transfer failed");
