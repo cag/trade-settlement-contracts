@@ -57,26 +57,19 @@ contract PredictionExchange is IERC1155TokenReceiver, Ownable {
     }
 
     function withdrawCollateral(address tokenContractAddress, uint amount, bytes calldata signature, address signer) external onlyOwner {
+        bytes memory data = abi.encodePacked(
+            "\x19\x01", DOMAIN_SEPARATOR,
+            keccak256(abi.encode(
+                keccak256("WithdrawCollateral(uint nonce,address collateralToken,uint amount)"),
+                ++lastNonces[signer],
+                tokenContractAddress,
+                amount
+            ))
+        );
         if(Address.isContract(signer)) {
-            require(ISignatureValidator(signer).isValidSignature(abi.encodePacked(
-                "\x19\x01", DOMAIN_SEPARATOR,
-                keccak256(abi.encode(
-                    keccak256("WithdrawCollateral(uint nonce,address collateralToken,uint amount)"),
-                    ++lastNonces[signer],
-                    tokenContractAddress,
-                    amount
-                ))
-            ), signature) == bytes4(keccak256("isValidSignature(bytes,bytes)")), "contract signature invalid");
+            require(ISignatureValidator(signer).isValidSignature(data, signature) == bytes4(keccak256("isValidSignature(bytes,bytes)")), "contract signature invalid");
         } else {
-            require(signer == ECDSA.recover(keccak256(abi.encodePacked(
-                "\x19\x01", DOMAIN_SEPARATOR,
-                keccak256(abi.encode(
-                    keccak256("WithdrawCollateral(uint nonce,address collateralToken,uint amount)"),
-                    ++lastNonces[signer],
-                    tokenContractAddress,
-                    amount
-                ))
-            )), signature), "signature does not match");
+            require(signer == ECDSA.recover(keccak256(data), signature), "signature does not match");
         }
         require(balances[signer][tokenContractAddress][0] >= amount, "not enough deposited by user");
         balances[signer][tokenContractAddress][0] -= amount;
