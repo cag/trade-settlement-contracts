@@ -4,7 +4,7 @@ const Web3 = require("web3");
 const PredictionExchange = artifacts.require("PredictionExchange");
 const PredictionMarketSystem = artifacts.require("PredictionMarketSystem");
 const MockERC20 = artifacts.require("MockERC20");
-const GnosisSafe = artifacts.require("GnosisSafe")
+const GnosisSafe = artifacts.require("GnosisSafe");
 
 web3 = new Web3(web3.currentProvider);
 const { eth } = web3;
@@ -70,7 +70,7 @@ const safeOperations = {
   CALL: 0,
   DELEGATECALL: 1,
   CREATE: 2
-}
+};
 
 contract("PredictionExchange", function(accounts) {
   const [
@@ -81,64 +81,83 @@ contract("PredictionExchange", function(accounts) {
     trader2,
     safeOwner1,
     safeOwner2,
-    safeExecutor,
+    safeExecutor
   ] = accounts;
 
-  const questionId = randomHex(32)
-  const outcomeSlotCount = 2
+  const questionId = randomHex(32);
+  const outcomeSlotCount = 2;
   const conditionId = soliditySha3(
-    {t: 'address', v: oracle},
-    {t: 'bytes32', v: questionId},
-    {t: 'uint', v: outcomeSlotCount},
-  )
-  const partition = [0b01, 0b10]
-  const collectionIds = partition.map(indexSet => soliditySha3(
-    {t: 'bytes32', v: conditionId},
-    {t: 'uint', v: indexSet},
-  ))
-  const safeOwners = [safeOwner1, safeOwner2]
-  safeOwners.sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : a === b ? 0 : 1)
-  const zeroAccount = `0x${'0'.repeat(40)}`
+    { t: "address", v: oracle },
+    { t: "bytes32", v: questionId },
+    { t: "uint", v: outcomeSlotCount }
+  );
+  const partition = [0b01, 0b10];
+  const collectionIds = partition.map(indexSet =>
+    soliditySha3({ t: "bytes32", v: conditionId }, { t: "uint", v: indexSet })
+  );
+  const safeOwners = [safeOwner1, safeOwner2];
+  safeOwners.sort((a, b) =>
+    a.toLowerCase() < b.toLowerCase() ? -1 : a === b ? 0 : 1
+  );
+  const zeroAccount = `0x${"0".repeat(40)}`;
 
-  let predictionExchange, collateralToken, predictionMarketSystem, positionIds, gnosisSafe, gnosisSafeTypedDataCommon;
+  let predictionExchange,
+    collateralToken,
+    predictionMarketSystem,
+    positionIds,
+    gnosisSafe,
+    gnosisSafeTypedDataCommon;
   before(async () => {
     collateralToken = await MockERC20.new({ from: minter });
-    predictionMarketSystem = await PredictionMarketSystem.new()
-    predictionExchange = await PredictionExchange.new(predictionMarketSystem.address, { from: operator });
+    predictionMarketSystem = await PredictionMarketSystem.new();
+    predictionExchange = await PredictionExchange.new(
+      predictionMarketSystem.address,
+      { from: operator }
+    );
 
-    await predictionMarketSystem.prepareCondition(oracle, questionId, outcomeSlotCount)
-    positionIds = collectionIds.map(collectionId => soliditySha3(
-      {t: 'address', v: collateralToken.address},
-      {t: 'bytes32', v: collectionId},
-    ))
+    await predictionMarketSystem.prepareCondition(
+      oracle,
+      questionId,
+      outcomeSlotCount
+    );
+    positionIds = collectionIds.map(collectionId =>
+      soliditySha3(
+        { t: "address", v: collateralToken.address },
+        { t: "bytes32", v: collectionId }
+      )
+    );
 
-    gnosisSafe = await GnosisSafe.new()
-    await gnosisSafe.setup([safeOwner1, safeOwner2], 2, zeroAccount, "0x", zeroAccount, 0, zeroAccount)
+    gnosisSafe = await GnosisSafe.new();
+    await gnosisSafe.setup(
+      [safeOwner1, safeOwner2],
+      2,
+      zeroAccount,
+      "0x",
+      zeroAccount,
+      0,
+      zeroAccount
+    );
     gnosisSafeTypedDataCommon = {
       types: {
-        EIP712Domain: [
-          { name: 'verifyingContract', type: 'address' }
-        ],
+        EIP712Domain: [{ name: "verifyingContract", type: "address" }],
         SafeTx: [
-          { name: 'to', type: 'address' },
-          { name: 'value', type: 'uint256' },
-          { name: 'data', type: 'bytes' },
-          { name: 'operation', type: 'uint8' },
-          { name: 'safeTxGas', type: 'uint256' },
-          { name: 'baseGas', type: 'uint256' },
-          { name: 'gasPrice', type: 'uint256' },
-          { name: 'gasToken', type: 'address' },
-          { name: 'refundReceiver', type: 'address' },
-          { name: 'nonce', type: 'uint256' },
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "data", type: "bytes" },
+          { name: "operation", type: "uint8" },
+          { name: "safeTxGas", type: "uint256" },
+          { name: "baseGas", type: "uint256" },
+          { name: "gasPrice", type: "uint256" },
+          { name: "gasToken", type: "address" },
+          { name: "refundReceiver", type: "address" },
+          { name: "nonce", type: "uint256" }
         ],
-        SafeMessage: [
-          { name: 'message', type: 'bytes' }
-        ]
+        SafeMessage: [{ name: "message", type: "bytes" }]
       },
       domain: {
-        verifyingContract: gnosisSafe.address,
+        verifyingContract: gnosisSafe.address
       }
-    }
+    };
   });
 
   it("allows users to deposit collateral tokens", async () => {
@@ -148,11 +167,20 @@ contract("PredictionExchange", function(accounts) {
     await collateralToken.mint(trader1, amount, { from: minter });
     assert.equal(await collateralToken.balanceOf(trader1), amount.toString());
 
-    assert.equal(await collateralToken.balanceOf(predictionExchange.address), 0);
-    await collateralToken.approve(predictionExchange.address, amount, { from: trader1 });
-    await predictionExchange.depositCollateral(collateralToken.address, amount, {
+    assert.equal(
+      await collateralToken.balanceOf(predictionExchange.address),
+      0
+    );
+    await collateralToken.approve(predictionExchange.address, amount, {
       from: trader1
     });
+    await predictionExchange.depositCollateral(
+      collateralToken.address,
+      amount,
+      {
+        from: trader1
+      }
+    );
     assert.equal(await collateralToken.balanceOf(trader1), 0);
     assert.equal(
       await collateralToken.balanceOf(predictionExchange.address),
@@ -178,8 +206,17 @@ contract("PredictionExchange", function(accounts) {
 
     await assert1155BalancesEqual(trader2, positionIds, 0);
     await collateralToken.mint(trader2, amount, { from: minter });
-    await collateralToken.approve(predictionMarketSystem.address, amount, {from: trader2})
-    await predictionMarketSystem.splitPosition(collateralToken.address, '0x', conditionId, partition, amount, {from:trader2})
+    await collateralToken.approve(predictionMarketSystem.address, amount, {
+      from: trader2
+    });
+    await predictionMarketSystem.splitPosition(
+      collateralToken.address,
+      "0x",
+      conditionId,
+      partition,
+      amount,
+      { from: trader2 }
+    );
     await assert1155BalancesEqual(trader2, positionIds, amount);
 
     const [singlePositionId, ...multiplePositionIds] = positionIds;
@@ -192,9 +229,15 @@ contract("PredictionExchange", function(accounts) {
       "0x",
       { from: trader2 }
     );
-    assert.equal(await predictionMarketSystem.balanceOf(trader2, singlePositionId), 0);
     assert.equal(
-      await predictionMarketSystem.balanceOf(predictionExchange.address, singlePositionId),
+      await predictionMarketSystem.balanceOf(trader2, singlePositionId),
+      0
+    );
+    assert.equal(
+      await predictionMarketSystem.balanceOf(
+        predictionExchange.address,
+        singlePositionId
+      ),
       amount.toString()
     );
     assert.equal(
@@ -222,7 +265,11 @@ contract("PredictionExchange", function(accounts) {
     );
     for (const id of multiplePositionIds) {
       assert.equal(
-        await predictionExchange.balanceOf(trader2, predictionMarketSystem.address, id),
+        await predictionExchange.balanceOf(
+          trader2,
+          predictionMarketSystem.address,
+          id
+        ),
         amount.toString()
       );
     }
@@ -268,7 +315,11 @@ contract("PredictionExchange", function(accounts) {
     );
 
     assert.equal(
-      await predictionExchange.balanceOf(trader1, collateralToken.address, "0x"),
+      await predictionExchange.balanceOf(
+        trader1,
+        collateralToken.address,
+        "0x"
+      ),
       amount.toString()
     );
 
@@ -282,7 +333,11 @@ contract("PredictionExchange", function(accounts) {
     );
 
     assert.equal(
-      await predictionExchange.balanceOf(trader1, collateralToken.address, "0x"),
+      await predictionExchange.balanceOf(
+        trader1,
+        collateralToken.address,
+        "0x"
+      ),
       0
     );
 
@@ -291,28 +346,30 @@ contract("PredictionExchange", function(accounts) {
 
   it("allows the operator (owner) to post collateral withdrawal requests from contracts", async () => {
     async function gnosisSafeCall(contract, method, ...args) {
-      const nonce = await gnosisSafe.nonce()
-      const txData = contract.contract.methods[method](...args).encodeABI()
-      const signatures = safeOwners.map(safeOwner => ethSigUtil.signTypedData(getPrivateKey(safeOwner), {
-        data: Object.assign(
-          {
-            primaryType: "SafeTx",
-            message: {
-              to: contract.address,
-              value: 0,
-              data: txData,
-              operation: safeOperations.CALL,
-              safeTxGas: 0,
-              baseGas: 0,
-              gasPrice: 0,
-              gasToken: zeroAccount,
-              refundReceiver: zeroAccount,
-              nonce,
-            }
-          },
-          gnosisSafeTypedDataCommon
-        )
-      }));
+      const nonce = await gnosisSafe.nonce();
+      const txData = contract.contract.methods[method](...args).encodeABI();
+      const signatures = safeOwners.map(safeOwner =>
+        ethSigUtil.signTypedData(getPrivateKey(safeOwner), {
+          data: Object.assign(
+            {
+              primaryType: "SafeTx",
+              message: {
+                to: contract.address,
+                value: 0,
+                data: txData,
+                operation: safeOperations.CALL,
+                safeTxGas: 0,
+                baseGas: 0,
+                gasPrice: 0,
+                gasToken: zeroAccount,
+                refundReceiver: zeroAccount,
+                nonce
+              }
+            },
+            gnosisSafeTypedDataCommon
+          )
+        })
+      );
       return await gnosisSafe.execTransaction(
         contract.address,
         0,
@@ -323,49 +380,75 @@ contract("PredictionExchange", function(accounts) {
         0,
         zeroAccount,
         zeroAccount,
-        `0x${ signatures.map(s => s.replace('0x', '')).join('') }`,
+        `0x${signatures.map(s => s.replace("0x", "")).join("")}`,
         { from: safeExecutor }
-      )
+      );
     }
 
     const amount = toBN(1e18);
     assert.equal(await collateralToken.balanceOf(gnosisSafe.address), 0);
     await collateralToken.mint(gnosisSafe.address, amount, { from: minter });
-    assert.equal(await collateralToken.balanceOf(gnosisSafe.address), amount.toString());
+    assert.equal(
+      await collateralToken.balanceOf(gnosisSafe.address),
+      amount.toString()
+    );
 
-    await gnosisSafeCall(collateralToken, 'approve', predictionExchange.address, amount.toString())
-    await gnosisSafeCall(predictionExchange, 'depositCollateral', collateralToken.address, amount.toString())
+    await gnosisSafeCall(
+      collateralToken,
+      "approve",
+      predictionExchange.address,
+      amount.toString()
+    );
+    await gnosisSafeCall(
+      predictionExchange,
+      "depositCollateral",
+      collateralToken.address,
+      amount.toString()
+    );
     assert.equal(await collateralToken.balanceOf(gnosisSafe.address), 0);
 
-    const nonce = await predictionExchange.getNonce(gnosisSafe.address)
-    const signatures = safeOwners.map(safeOwner => ethSigUtil.signTypedData(getPrivateKey(safeOwner), {
-      data: Object.assign(
-        {
-          primaryType: "SafeMessage",
-          message: {
-            message: `0x${Buffer.concat([
-              Buffer.from('1901', 'hex'),
-              ethSigUtil.TypedDataUtils.hashStruct('EIP712Domain', predictionExchangeTypedDataCommon.domain, predictionExchangeTypedDataCommon.types),
-              ethSigUtil.TypedDataUtils.hashStruct("WithdrawCollateral", {
-                nonce,
-                collateralToken: collateralToken.address,
-                amount
-              }, predictionExchangeTypedDataCommon.types)
-            ]).toString('hex')}`
-          }
-        },
-        gnosisSafeTypedDataCommon
-      )
-    }));
+    const nonce = await predictionExchange.getNonce(gnosisSafe.address);
+    const signatures = safeOwners.map(safeOwner =>
+      ethSigUtil.signTypedData(getPrivateKey(safeOwner), {
+        data: Object.assign(
+          {
+            primaryType: "SafeMessage",
+            message: {
+              message: `0x${Buffer.concat([
+                Buffer.from("1901", "hex"),
+                ethSigUtil.TypedDataUtils.hashStruct(
+                  "EIP712Domain",
+                  predictionExchangeTypedDataCommon.domain,
+                  predictionExchangeTypedDataCommon.types
+                ),
+                ethSigUtil.TypedDataUtils.hashStruct(
+                  "WithdrawCollateral",
+                  {
+                    nonce,
+                    collateralToken: collateralToken.address,
+                    amount
+                  },
+                  predictionExchangeTypedDataCommon.types
+                )
+              ]).toString("hex")}`
+            }
+          },
+          gnosisSafeTypedDataCommon
+        )
+      })
+    );
 
     await predictionExchange.withdrawCollateral(
       collateralToken.address,
       amount,
-      `0x${ signatures.map(s => s.replace('0x', '')).join('') }`,
+      `0x${signatures.map(s => s.replace("0x", "")).join("")}`,
       gnosisSafe.address,
       { from: operator }
-    )
+    );
 
-    assert.equal(await collateralToken.balanceOf(gnosisSafe.address), amount.toString());
-  })
+    assert.equal(
+      await collateralToken.balanceOf(gnosisSafe.address),
+      amount.toString()
+    );
+  });
 });
