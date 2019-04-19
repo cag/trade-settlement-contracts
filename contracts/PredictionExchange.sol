@@ -26,8 +26,8 @@ contract PredictionExchange is IERC1155TokenReceiver, Ownable {
         pmSystem = _pmSystem;
     }
 
-    function balanceOf(address user, address tokenContractAddress, uint tokenId) external view returns (uint) {
-        return balances[user][tokenContractAddress][tokenId];
+    function balanceOf(address user, address collateralToken, uint positionId) external view returns (uint) {
+        return balances[user][collateralToken][positionId];
     }
 
     function depositCollateral(IERC20 token, uint amount) external {
@@ -56,13 +56,14 @@ contract PredictionExchange is IERC1155TokenReceiver, Ownable {
         return lastNonces[user] + 1;
     }
 
-    function withdrawCollateral(address tokenContractAddress, uint amount, bytes calldata signature, address signer) external onlyOwner {
+    function withdraw(address collateralToken, uint positionId, uint amount, bytes calldata signature, address signer) external onlyOwner {
         bytes memory data = abi.encodePacked(
             "\x19\x01", DOMAIN_SEPARATOR,
             keccak256(abi.encode(
-                keccak256("WithdrawCollateral(uint nonce,address collateralToken,uint amount)"),
+                keccak256("Withdraw(uint nonce,address collateralToken,uint positionId,uint amount)"),
                 ++lastNonces[signer],
-                tokenContractAddress,
+                collateralToken,
+                positionId,
                 amount
             ))
         );
@@ -71,8 +72,13 @@ contract PredictionExchange is IERC1155TokenReceiver, Ownable {
         } else {
             require(signer == ECDSA.recover(keccak256(data), signature), "signature does not match");
         }
-        require(balances[signer][tokenContractAddress][0] >= amount, "not enough deposited by user");
-        balances[signer][tokenContractAddress][0] -= amount;
-        require(IERC20(tokenContractAddress).transfer(signer, amount), "withdrawal transfer failed");
+
+        require(balances[signer][collateralToken][positionId] >= amount, "not enough deposited by user");
+        balances[signer][collateralToken][positionId] -= amount;
+
+        if(positionId == 0)
+            require(IERC20(collateralToken).transfer(signer, amount), "withdrawal transfer failed");
+        else
+            pmSystem.safeTransferFrom(address(this), signer, positionId, amount, "");
     }
 }

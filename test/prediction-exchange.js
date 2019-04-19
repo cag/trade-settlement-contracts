@@ -52,9 +52,10 @@ const predictionExchangeTypedDataCommon = {
       // { name: 'chainId', type: 'uint' },
       // { name: 'verifyingContract', type: 'address' },
     ],
-    WithdrawCollateral: [
+    Withdraw: [
       { name: "nonce", type: "uint" },
       { name: "collateralToken", type: "address" },
+      { name: "positionId", type: "uint" },
       { name: "amount", type: "uint" }
     ]
   },
@@ -279,8 +280,9 @@ contract("PredictionExchange", function(accounts) {
     const amount = toBN(1e18);
 
     await assert.rejects(
-      predictionExchange.withdrawCollateral(
+      predictionExchange.withdraw(
         collateralToken.address,
+        0,
         amount,
         randomHex(65),
         trader1,
@@ -292,10 +294,11 @@ contract("PredictionExchange", function(accounts) {
     const signature = ethSigUtil.signTypedData(getPrivateKey(trader1), {
       data: Object.assign(
         {
-          primaryType: "WithdrawCollateral",
+          primaryType: "Withdraw",
           message: {
             nonce: await predictionExchange.getNonce(trader1),
             collateralToken: collateralToken.address,
+            positionId: 0,
             amount
           }
         },
@@ -304,8 +307,9 @@ contract("PredictionExchange", function(accounts) {
     });
 
     await assert.rejects(
-      predictionExchange.withdrawCollateral(
+      predictionExchange.withdraw(
         collateralToken.address,
+        0,
         amount,
         signature,
         trader1,
@@ -325,11 +329,13 @@ contract("PredictionExchange", function(accounts) {
 
     assert.equal(await collateralToken.balanceOf(trader1), 0);
 
-    await predictionExchange.withdrawCollateral(
+    await predictionExchange.withdraw(
       collateralToken.address,
+      0,
       amount,
       signature,
-      trader1
+      trader1,
+      { from: operator }
     );
 
     assert.equal(
@@ -342,6 +348,100 @@ contract("PredictionExchange", function(accounts) {
     );
 
     assert.equal(await collateralToken.balanceOf(trader1), amount.toString());
+  });
+
+  it("allows the operator (owner) to post outcome token withdrawal requests from EOAs", async () => {
+    const amount = toBN(1e18);
+
+    const [singlePositionId] = positionIds;
+
+    await assert.rejects(
+      predictionExchange.withdraw(
+        predictionMarketSystem.address,
+        singlePositionId,
+        amount,
+        randomHex(65),
+        trader2,
+        { from: operator }
+      ),
+      /signature does not match/
+    );
+
+    const signature = ethSigUtil.signTypedData(getPrivateKey(trader2), {
+      data: Object.assign(
+        {
+          primaryType: "Withdraw",
+          message: {
+            nonce: await predictionExchange.getNonce(trader2),
+            collateralToken: predictionMarketSystem.address,
+            positionId: singlePositionId,
+            amount
+          }
+        },
+        predictionExchangeTypedDataCommon
+      )
+    });
+
+    await assert.rejects(
+      predictionExchange.withdraw(
+        predictionMarketSystem.address,
+        singlePositionId,
+        amount,
+        signature,
+        trader2,
+        { from: trader2 }
+      ),
+      /revert/
+    );
+
+    assert.equal(
+      await predictionMarketSystem.balanceOf(trader2, singlePositionId),
+      0
+    );
+    assert.equal(
+      await predictionMarketSystem.balanceOf(
+        predictionExchange.address,
+        singlePositionId
+      ),
+      amount.toString()
+    );
+    assert.equal(
+      await predictionExchange.balanceOf(
+        trader2,
+        predictionMarketSystem.address,
+        singlePositionId
+      ),
+      amount.toString()
+    );
+
+    await predictionExchange.withdraw(
+      predictionMarketSystem.address,
+      singlePositionId,
+      amount,
+      signature,
+      trader2,
+      { from: operator }
+    );
+
+    assert.equal(
+      await predictionMarketSystem.balanceOf(trader2, singlePositionId),
+      amount.toString()
+    );
+    assert.equal(
+      await predictionMarketSystem.balanceOf(
+        predictionExchange.address,
+        singlePositionId
+      ),
+      0
+    );
+    assert.equal(
+      await predictionExchange.balanceOf(
+        trader2,
+        predictionMarketSystem.address,
+        singlePositionId
+      ),
+      0
+    );
   });
 
   it("allows the operator (owner) to post collateral withdrawal requests from contracts", async () => {
@@ -422,10 +522,11 @@ contract("PredictionExchange", function(accounts) {
                   predictionExchangeTypedDataCommon.types
                 ),
                 ethSigUtil.TypedDataUtils.hashStruct(
-                  "WithdrawCollateral",
+                  "Withdraw",
                   {
                     nonce,
                     collateralToken: collateralToken.address,
+                    positionId: 0,
                     amount
                   },
                   predictionExchangeTypedDataCommon.types
@@ -438,8 +539,9 @@ contract("PredictionExchange", function(accounts) {
       })
     );
 
-    await predictionExchange.withdrawCollateral(
+    await predictionExchange.withdraw(
       collateralToken.address,
+      0,
       amount,
       `0x${signatures.map(s => s.replace("0x", "")).join("")}`,
       gnosisSafe.address,
